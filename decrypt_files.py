@@ -6,6 +6,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 
+dir = "out"
+
 if __name__ == "__main__":
 
     password = "password".encode()
@@ -19,8 +21,6 @@ if __name__ == "__main__":
             backend = default_backend()
     )
     key = base64.urlsafe_b64encode(kdf.derive(password))
-
-    dir = "/Users/ibrah/Documents/key-logger/out"
 
     # Loops through all files in /out and decrypts each file
     for filename in os.listdir(dir):
