@@ -24,10 +24,9 @@ if __name__ == "__main__":
 
     # Loops through all files in /out and decrypts each file
     for filename in os.listdir(dir):
-        if filename.endswith('.txt'):
-            with open(os.path.join(dir, filename), "rb") as file:
-                data = file.read()
-            fernet = Fernet(key)
-            decrypted = fernet.decrypt(data)
-            with open(os.path.join(dir, filename), "wb") as file:
-                file.write(decrypted)
+        with open(os.path.join(dir, filename), "rb") as file:
+            data = file.read()
+        fernet = Fernet(key)
+        decrypted = fernet.decrypt(data)
+        with open(os.path.join(dir, filename), "wb") as file:
+            file.write(decrypted)

