@@ -27,6 +27,8 @@ This script requires several external Python libraries.
 * `Pillow`
 * `cryptography`
 
+---
+
 ## Usage
 
 1.   **Install all dependencies**
@@ -48,3 +50,5 @@ This script requires several external Python libraries.
 - Add cross platform support for Windows/Linux as AppKit is currently being used which is just for Mac's
 - Use a configuration file to settings and variables such as email addresses, time intervals, iterations etc..
 - Add a requirements.txt file
+- Convert python script to an executable
+- Build a front end web app to track and view victim's activities. 
